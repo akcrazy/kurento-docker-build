@@ -19,6 +19,11 @@ trap on_error ERR
 BASE_RTP_FILE="/etc/kurento/modules/kurento/BaseRtpEndpoint.conf.ini"
 WEBRTC_FILE="/etc/kurento/modules/kurento/WebRtcEndpoint.conf.ini"
 
+ENV_CONFIG_FILE="/config/env.conf"
+if [ -d ${ENV_CONFIG_FILE} ];then
+  source ${ENV_CONFIG_FILE}
+fi
+
 # Check root permissions -- Overriding the Docker container run user (e.g. with
 # `docker run --user=1234`) is not supported, because this entrypoint script
 # needs to edit root-owned files under "/etc".
