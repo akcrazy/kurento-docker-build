@@ -31,11 +31,11 @@ G_DEFINE_QUARK (KMS_REMB_REMOTE, kms_remb_remote);
 
 #define DEFAULT_REMB_PACKETS_RECV_INTERVAL_TOP 100
 #define DEFAULT_REMB_EXPONENTIAL_FACTOR 0.04
-#define DEFAULT_REMB_LINEAL_FACTOR_MIN 50       /* bps */
-#define DEFAULT_REMB_LINEAL_FACTOR_GRADE ((60 * RTCP_MIN_INTERVAL)/ 1000)       /* Reach last top bitrate in 60secs aprox. */
+#define DEFAULT_REMB_LINEAL_FACTOR_MIN 20000       /* bps */
+#define DEFAULT_REMB_LINEAL_FACTOR_GRADE ((60 * RTCP_MIN_INTERVAL)/ 1000/3)       /* Reach last top bitrate in 60secs aprox. */
 #define DEFAULT_REMB_DECREMENT_FACTOR 0.5
 #define DEFAULT_REMB_THRESHOLD_FACTOR 0.8
-#define DEFAULT_REMB_UP_LOSSES 12       /* 4% losses */
+#define DEFAULT_REMB_UP_LOSSES 6       /* 2.3% losses. considering the nack makes fraction_loss lower, change from 12 to 6, */
 
 #define REMB_MAX_FACTOR_INPUT_BR 2
 
@@ -350,6 +350,11 @@ kms_remb_local_update (KmsRembLocal * self)
     self->remb = bitrate;
     self->probed = TRUE;
   }
+  
+  if (self->remb_sent_count < 3 && fraction_lost==255){
+    GST_TRACE_OBJECT (KMS_REMB_BASE (self)->rtpsess, "fraction_lost=255 at beginning, set to 0");
+    fraction_lost = 0;
+  }
 
   packets_rcv_interval_top =
       MAX (self->packets_recv_interval_top, packets_rcv_interval);
@@ -375,6 +380,8 @@ kms_remb_local_update (KmsRembLocal * self)
     gint remb_base, remb_new;
 
     remb_base = MAX (self->remb, self->max_br);
+    
+    self->threshold = MAX (self->threshold, REMB_MAX);
 
     if (remb_base < self->threshold) {
       GST_TRACE_OBJECT (KMS_REMB_BASE (self)->rtpsess,
@@ -402,10 +409,10 @@ kms_remb_local_update (KmsRembLocal * self)
       self->remb = MIN (self->remb, self->max_br);
     }
     else {
-      GST_TRACE_OBJECT (KMS_REMB_BASE (self)->rtpsess, "C) Too many losses");
+      GST_TRACE_OBJECT (KMS_REMB_BASE (self)->rtpsess, "C.1) Too many losses");
+      self->remb = MAX (self->remb * self->decrement_factor, self->avg_br * 0.9);
 
-      self->remb = remb_base * self->decrement_factor;
-      self->fraction_lost_record = 0;
+      // self->fraction_lost_record = 0;
       self->max_br = 0;
       self->avg_br = 0;
     }
@@ -490,16 +497,16 @@ kms_remb_local_on_sending_rtcp (GObject *rtpsession,
   //const guint32 old_bitrate = self->remb_sent;
   guint32 new_bitrate = self->remb;
 
-  if (self->event_manager != NULL) {
-    guint remb_local_max;
-
-    remb_local_max = kms_utils_remb_event_manager_get_min (self->event_manager);
-    if (remb_local_max > 0) {
-      GST_TRACE_OBJECT (rtpsession, "Local max: %" G_GUINT32_FORMAT,
-          remb_local_max);
-      new_bitrate = MIN (new_bitrate, remb_local_max);
-    }
-  }
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
 
   if (self->min_bw > 0) {
     new_bitrate = MAX (new_bitrate, self->min_bw * 1000);
@@ -522,6 +529,7 @@ kms_remb_local_on_sending_rtcp (GObject *rtpsession,
   }
 
   self->last_sent_time = current_time;
+  self->remb_sent_count += 1;
   ret = TRUE;
 
 end:
@@ -563,6 +571,7 @@ kms_remb_local_create (GObject * rtpsession, guint min_bw, guint max_bw)
   self->probed = FALSE;
   self->remb = REMB_MAX;
   self->remb_sent = REMB_MAX;
+  self->remb_sent_count = 0;
   self->threshold = REMB_MAX;
   self->lineal_factor = DEFAULT_REMB_LINEAL_FACTOR_MIN;
 
