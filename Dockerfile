@@ -3,10 +3,21 @@ LABEL MAINTAINER=tplinknbu<nbucloud.ops@tp-link.com.cn>
 
 ENV LANG="C.UTF-8"
 
+COPY repository/ /root/.m2/repository
+
+# Copy code into docker
+COPY gst-plugins-good/ /gst-plugins-good/
+
+# Build
+RUN cd gst-plugins-good \
+  && chmod +x ./autogen.sh \
+  && ./autogen.sh \
+  && make \
+  && cp gst/rtpmanager/.libs/libgstrtpmanager.so /usr/lib/x86_64-linux-gnu/gstreamer-1.5/ \
+  && cp gst/rtp/.libs/libgstrtp.so /usr/lib/x86_64-linux-gnu/gstreamer-1.5/
+
 # Copy code into docker
 COPY kms-omni-build/ /kms-omni-build/
-
-COPY repository/ /root/.m2/repository
 
 # Build (remove run-part from .sh line-462)
 RUN export MAKEFLAGS="-j$(nproc)" \
